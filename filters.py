@@ -2,6 +2,7 @@
 import numpy as np
 from scipy import signal as sig
 import matplotlib.pyplot as plt
+import os
 
 
 def get_value(display_string):
@@ -54,8 +55,8 @@ def DSPF_sp_biquad(x, params, delay):
     return r, delay
 
 
-def display_signal(signal, t, fs):
-    plt.figure(2)
+def display_signal(signal, t, fs, figure_number):
+    plt.figure(figure_number)
     plt.plot(t, signal, drawstyle='steps-post')
     plt.xlabel('Czas [s]')
     plt.ylabel('Amplituda')
@@ -67,7 +68,7 @@ def display_signal(signal, t, fs):
     y = np.fft.fft(signal) / signal_length
     y = y[:int(signal_length / 2)]
 
-    plt.figure(3)
+    plt.figure(figure_number+1)
     _, _, baseline = plt.stem(frq, abs(y), '-.')
     plt.setp(baseline, 'color', 'r', 'linewidth', 2)
     plt.xlabel('Częstotliwość [Hz]')
@@ -76,7 +77,7 @@ def display_signal(signal, t, fs):
 
 def filter_designing(fs):
     filter_order = 14
-    fc = 996 / fs
+    fc = 300 / fs
     char = 'lowpass'
     type = 'butter'
     sos = sig.iirfilter(filter_order, fc, btype=char, ftype=type, output='sos')
@@ -128,6 +129,47 @@ def filter_designing(fs):
     return filter_order, sos_, qsos
 
 
+def display_output():
+    with open("from_c.txt", "r") as file:
+        output_signal = file.readlines()
+        for i in range(0, len(output_signal)):
+            output_signal[i] = float(output_signal[i])
+    fs = 8000
+    t = np.arange(0, 1, (1/fs))
+    display_signal(output_signal, t, fs, 4)
+
+
+def save_parameters_for_hand_c(signal, sos):
+    with open("sin.txt", "w") as data_file:
+        for sample in signal:
+            data_file.write(str(sample) + ',')
+    with open("filter_params.txt", "w") as filter_file:
+        filter_file.write('{')
+        for i in range(0, len(sos)):
+            filter_file.write('{')
+            for j in range(0, 6):
+                if j < 5:
+                    filter_file.write(str(sos[i][j]) + ', ')
+                else:
+                    filter_file.write(str(sos[i][j]))
+            if i < len(sos) - 1:
+                filter_file.write('},\n')
+            else:
+                filter_file.write('}')
+        filter_file.write('};')
+
+
+def save_parameters_auto_c(signal, sos):
+    with open("sin.txt", "w") as data_file:
+        for sample in signal:
+            data_file.write(str(sample) + '\n')
+    with open("filter_params.txt", "w") as filter_file:
+        filter_file.write(str(len(sos))+'\n')
+        for i in range(0, len(sos)):
+            for j in range(0, 6):
+                    filter_file.write(str(sos[i][j]) + '\n')
+
+
 def main():
     signal_frequency, amplitude = get_signal_params()
     fs, ts = process_sample_rate(signal_frequency)
@@ -137,16 +179,14 @@ def main():
     np.set_printoptions(threshold=np.nan)
     t = np.arange(0, 1, ts)  # time vector
     signal = amplitude * np.sin(2 * np.pi * signal_frequency * t)
-    # with open("sin.txt", "w") as data_file:
-    #     for sample in signal:
-    #         data_file.write(str(sample)+'\n')
+    save_parameters_auto_c(signal, sos)
+    os.system('c_filter.exe')
     delay = np.array([0.0, 0.0], dtype=float)
     for i in range(0, int(filter_order/2)):
         signal, delay = DSPF_sp_biquad(signal, sos[i], delay)
-    display_signal(signal, t, fs)
-    print("Parameters: \n", sos)
+    display_signal(signal, t, fs, 2)
+    display_output()
     plt.show()
-
 
 if __name__ == "__main__":
     main()
